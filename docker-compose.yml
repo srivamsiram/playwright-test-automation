@@ -1,0 +1,44 @@
+# Run the whole suite:    docker compose up --build --abort-on-container-exit --exit-code-from tests
+# Run a single project:   docker compose run --rm tests --project=firefox
+# Run only the API suite: docker compose run --rm tests --project=api
+
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PLAYWRIGHT_VERSION: "1.55.0"
+    image: playwright-framework:latest
+    container_name: playwright-tests
+    # Recommended by Playwright: avoids Chromium running out of shared memory.
+    ipc: host
+    # Reaps zombie browser processes.
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CI: "true"
+      BASE_URL: ${BASE_URL:-https://www.saucedemo.com}
+      API_BASE_URL: ${API_BASE_URL:-https://restful-booker.herokuapp.com}
+      # ":-" also covers set-but-empty values (e.g. an undefined CI secret).
+      UI_USERNAME: ${UI_USERNAME:-standard_user}
+      UI_PASSWORD: ${UI_PASSWORD:-secret_sauce}
+      API_USERNAME: ${API_USERNAME:-admin}
+      API_PASSWORD: ${API_PASSWORD:-password123}
+      WORKERS: ${WORKERS:-4}
+    volumes:
+      - ./reports:/app/reports
+      - ./test-results:/app/test-results
+
+  # Optional: serve the HTML report at http://localhost:9323 after a run.
+  #   docker compose --profile report up report
+  report:
+    image: playwright-framework:latest
+    profiles: ["report"]
+    entrypoint: ["npx", "playwright", "show-report", "reports/html", "--host", "0.0.0.0", "--port", "9323"]
+    ports:
+      - "9323:9323"
+    volumes:
+      - ./reports:/app/reports

@@ -1,0 +1,85 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Nightly run at 02:00 UTC to catch drift in the apps under test.
+    - cron: "0 2 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: playwright-framework:latest
+
+jobs:
+  test:
+    name: ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [api, chromium, firefox, webkit]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Same Dockerfile as local runs; layers are cached between workflow runs.
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run tests (${{ matrix.project }})
+        run: docker compose run --rm tests --project=${{ matrix.project }}
+        env:
+          # Optional overrides. Set them under Settings → Secrets and variables → Actions.
+          # When unset, docker-compose.yml falls back to the public demo defaults.
+          BASE_URL: ${{ vars.BASE_URL }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          UI_USERNAME: ${{ secrets.UI_USERNAME }}
+          UI_PASSWORD: ${{ secrets.UI_PASSWORD }}
+          API_USERNAME: ${{ secrets.API_USERNAME }}
+          API_PASSWORD: ${{ secrets.API_PASSWORD }}
+
+      - name: Write job summary
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f reports/json/results.json ]; then
+            jq -r '.stats | "### ${{ matrix.project }}\n| Passed | Failed | Flaky | Skipped | Duration |\n|---|---|---|---|---|\n| \(.expected) | \(.unexpected) | \(.flaky) | \(.skipped) | \((.duration/1000)|floor)s |"' \
+              reports/json/results.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### ${{ matrix.project }}: no results file produced" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.project }}
+          path: reports/
+          retention-days: 14
+
+      - name: Upload traces, screenshots & videos
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.project }}
+          path: test-results/
+          retention-days: 14

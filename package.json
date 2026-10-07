@@ -1,0 +1,29 @@
+{
+  "name": "playwright-framework",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright + TypeScript UI & API test automation framework (POM, Docker, multi-browser)",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --project=chromium --project=firefox --project=webkit",
+    "test:api": "playwright test --project=api",
+    "test:chromium": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:webkit": "playwright test --project=webkit",
+    "test:headed": "playwright test --project=chromium --headed",
+    "test:debug": "playwright test --project=chromium --debug",
+    "report": "playwright show-report reports/html",
+    "typecheck": "tsc --noEmit",
+    "docker:build": "docker compose build",
+    "docker:test": "docker compose up --build --abort-on-container-exit --exit-code-from tests"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0",
+    "@types/node": "^22.10.0",
+    "dotenv": "^16.4.7",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
